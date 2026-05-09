@@ -35,6 +35,12 @@ function App() {
     return mockData.connections.find((c) => c.id === selectedConnectionId) || null;
   }, [selectedConnectionId]);
 
+  const changeTimestamps = useMemo(() => {
+    const entityTimes = mockData.entities.map((e) => new Date(e.timestamp).getTime());
+    const connectionTimes = mockData.connections.map((c) => new Date(c.timestamp).getTime());
+    return Array.from(new Set([...entityTimes, ...connectionTimes])).sort((a, b) => a - b);
+  }, []);
+
   const formatTime = (time: number) => {
     return new Date(time).toLocaleString();
   };
@@ -70,6 +76,7 @@ function App() {
           value={currentTime}
           onChange={setCurrentTime}
           formatTime={formatTime}
+          marks={changeTimestamps}
         />
       </footer>
     </div>
