@@ -52,35 +52,50 @@ function HumanBody({ marks, onSelect }: { marks: Mark[], onSelect: (mark: Mark) 
         newResolved.push({ ...mark, worldPos: new THREE.Vector3(mark.coordinates.x, mark.coordinates.y, mark.coordinates.z) });
       } else if (mark.location) {
         let targetNode: THREE.Object3D | null = null;
-        const searchLoc = mark.location.toLowerCase();
+        const originalLoc = mark.location.toLowerCase();
+        
+        // Determine side and strip it from the search term
+        const isLeft = originalLoc.includes('left');
+        const isRight = originalLoc.includes('right');
+        const searchLoc = originalLoc.replace('left', '').replace('right', '').trim();
         
         // Try direct match then map match
         const anatomicalTerm = ANATOMY_MAP[searchLoc] || searchLoc;
         
         scene.traverse(node => {
+          // Use a more robust check: does the node name contain the anatomical term?
           if (node.name.toLowerCase().includes(anatomicalTerm)) {
-            targetNode = node;
+            // If we found a mesh, that's our best bet
+            if (node.type === 'Mesh') {
+              targetNode = node;
+            } else if (!targetNode) {
+              // If we don't have a mesh yet, take the group/node
+              targetNode = node;
+            }
           }
         });
 
         if (targetNode) {
           const node = targetNode as THREE.Object3D;
-          // Force world matrix update to get accurate bounding box
           node.updateWorldMatrix(true, true);
           
           const box = new THREE.Box3().setFromObject(node);
           const worldPos = new THREE.Vector3();
           box.getCenter(worldPos);
           
-          // If the location specifies "left", we use the mirrored position
-          // Assuming the source model is the right side
-          if (searchLoc.includes('left')) {
-            worldPos.x = -worldPos.x;
+          // Apply side logic
+          // If the model is right-sided by default:
+          // 'left' means we flip X.
+          // 'right' or no side means we use it as is.
+          if (isLeft) {
+            worldPos.x = -Math.abs(worldPos.x); // Force negative X for left
+          } else if (isRight) {
+            worldPos.x = Math.abs(worldPos.x);  // Force positive X for right
           }
           
           newResolved.push({ ...mark, worldPos });
         } else {
-          console.warn(`Anatomy location not found in model: ${mark.location} (tried term: ${anatomicalTerm})`);
+          console.warn(`Anatomy location not found: "${mark.location}" (searched for: "${anatomicalTerm}")`);
         }
       }
     });
