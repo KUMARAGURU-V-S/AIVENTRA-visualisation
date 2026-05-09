@@ -1,0 +1,90 @@
+import type { InvestigationData } from './types';
+
+export const mockData: InvestigationData = {
+  entities: [
+    {
+      id: 'vance',
+      label: 'Victor Vance',
+      type: 'person',
+      details: 'Known alias: "The Ghost". Suspected coordinator for the Midnight Shadow syndicate.',
+      timestamp: '2026-10-24T20:00:00Z',
+    },
+    {
+      id: 'rostova',
+      label: 'Elena Rostova',
+      type: 'person',
+      details: 'Ex-intelligence officer. Specialist in encrypted communications.',
+      timestamp: '2026-10-24T20:00:00Z',
+    },
+    {
+      id: 'pier42',
+      label: 'Pier 42',
+      type: 'location',
+      details: 'Industrial shipping hub. Low surveillance area.',
+      timestamp: '2026-10-24T22:00:00Z',
+    },
+    {
+      id: 'phone1',
+      label: 'Burner Phone #0199',
+      type: 'evidence',
+      details: 'Recovered from trash near the warehouse. Registered to a shell company.',
+      timestamp: '2026-10-24T23:00:00Z',
+    },
+    {
+      id: 'bank',
+      label: 'Downtown Bank',
+      type: 'location',
+      details: 'Main branch. Source of the suspicious $2M transfer.',
+      timestamp: '2026-10-25T01:00:00Z',
+    },
+    {
+      id: 'transfer1',
+      label: 'TX-992 Transfer',
+      type: 'evidence',
+      details: 'Wire transfer for $2,000,000. Origin: Caymans.',
+      timestamp: '2026-10-25T01:00:00Z',
+    },
+  ],
+  connections: [
+    {
+      id: 'c1',
+      from: 'vance',
+      to: 'pier42',
+      label: 'Seen at',
+      timestamp: '2026-10-24T22:00:00Z',
+      details: 'CCTV footage shows a male matching Vance\'s description entering at 22:00.',
+    },
+    {
+      id: 'c2',
+      from: 'phone1',
+      to: 'rostova',
+      label: 'Called',
+      timestamp: '2026-10-24T23:15:00Z',
+      details: 'Telecom records show a 45-second call from the burner phone to Elena\'s personal line.',
+    },
+    {
+      id: 'c3',
+      from: 'vance',
+      to: 'phone1',
+      label: 'Used',
+      timestamp: '2026-10-24T23:00:00Z',
+      details: 'Fingerprints found on the device battery match Vance.',
+    },
+    {
+      id: 'c4',
+      from: 'transfer1',
+      to: 'bank',
+      label: 'Processed at',
+      timestamp: '2026-10-25T01:00:00Z',
+      details: 'Digital ledger entry confirmed by bank security.',
+    },
+    {
+      id: 'c5',
+      from: 'transfer1',
+      to: 'rostova',
+      label: 'Beneficiary',
+      timestamp: '2026-10-25T01:30:00Z',
+      details: 'The funds were moved to an account controlled by a known Rostova proxy.',
+    },
+  ],
+};
