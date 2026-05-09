@@ -1,0 +1,41 @@
+{
+  "patient_id": "P12345",
+  "report_date": "2026-05-10",
+  "marks": [
+    {
+      "id": "m1",
+      "type": "fracture",
+      "location": "skull",
+      "color": "red",
+      "description": "Linear fracture on the frontal bone"
+    },
+    {
+      "id": "m2",
+      "type": "injury",
+      "location": "left femur",
+      "color": "orange",
+      "description": "Impact mark on the left femur"
+    },
+    {
+      "id": "m3",
+      "type": "injury",
+      "location": "right humerus",
+      "color": "blue",
+      "description": "Bruise on the right upper arm"
+    },
+    {
+      "id": "m4",
+      "type": "evidence",
+      "location": "left rib",
+      "color": "yellow",
+      "description": "Possible metallic fragment found near left 4th rib"
+    },
+    {
+      "id": "m5",
+      "type": "trauma",
+      "location": "tibia",
+      "color": "purple",
+      "description": "Damage to right lower leg bone"
+    }
+  ]
+}
