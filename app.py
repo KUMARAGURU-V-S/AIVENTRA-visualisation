@@ -1,19 +1,19 @@
 """
-ForensiX CDR Analyzer — Main Streamlit Application
-AI-powered forensic analysis of phone Call Detail Records.
+ForensiX CDR Analyzer — Streamlit UI Client
+Connects to the ForensiX FastAPI server to perform forensic analysis.
 """
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 import os
-import time
+import requests
 from dotenv import load_dotenv
-from tools import TOOL_REGISTRY
-from agent import run_agent
 
 load_dotenv()
+
+SERVER_URL = os.getenv("API_SERVER_URL", "http://localhost:8000")
 
 # ─── Page Config ───
 st.set_page_config(
@@ -149,14 +149,41 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-@st.cache_data
-def load_data(file_path=None, uploaded_file=None):
-    """Load CDR data from file path or uploaded file."""
-    if uploaded_file is not None:
-        return pd.read_csv(uploaded_file)
-    elif file_path and os.path.exists(file_path):
-        return pd.read_csv(file_path)
-    return None
+def check_server_health():
+    try:
+        response = requests.get(f"{SERVER_URL}/api/health", timeout=3)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False
+
+
+def get_available_tools():
+    try:
+        response = requests.get(f"{SERVER_URL}/api/tools")
+        if response.status_code == 200:
+            return response.json().get("tools", [])
+    except requests.RequestException:
+        pass
+    return []
+
+
+def get_uploaded_files():
+    try:
+        response = requests.get(f"{SERVER_URL}/api/files")
+        if response.status_code == 200:
+            return response.json().get("files", [])
+    except requests.RequestException:
+        pass
+    return []
+
+
+def upload_file(file):
+    try:
+        files = {"file": (file.name, file, "text/csv")}
+        response = requests.post(f"{SERVER_URL}/api/files/upload", files=files)
+        return response.status_code == 200, response.json()
+    except requests.RequestException as e:
+        return False, str(e)
 
 
 def render_header():
@@ -168,105 +195,56 @@ def render_header():
     """, unsafe_allow_html=True)
 
 
-def render_stats(df):
-    """Render dataset overview statistics."""
-    cols = st.columns(5)
-    stats = [
-        (f"{len(df):,}", "Total Records"),
-        (f"{df['Phone Number'].nunique():,}", "Unique Numbers"),
-        (f"{(df['Churn'].astype(str).str.upper() == 'TRUE').sum():,}", "Flagged (Churn)"),
-        (f"{df['Account Length'].median():.0f}d", "Median Account Age"),
-        (f"{(df['Day Calls'] + df['Eve Calls'] + df['Night Calls'] + df['Intl Calls']).mean():.0f}", "Avg Total Calls"),
-    ]
-    for col, (value, label) in zip(cols, stats):
-        col.markdown(f"""
-        <div class="stat-card">
-            <div class="stat-value">{value}</div>
-            <div class="stat-label">{label}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-
-def render_overview_charts(df):
-    """Render quick overview charts of the dataset."""
-    col1, col2 = st.columns(2)
-
-    with col1:
-        df_temp = df.copy()
-        df_temp["Total_Calls"] = df_temp["Day Calls"] + df_temp["Eve Calls"] + df_temp["Night Calls"] + df_temp["Intl Calls"]
-        fig = px.histogram(
-            df_temp, x="Total_Calls", nbins=60,
-            color_discrete_sequence=["#4a90d9"],
-            title="📞 Total Call Volume Distribution",
-        )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="#0a0a0f", plot_bgcolor="#0a0a0f", height=350)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        call_data = pd.DataFrame({
-            "Period": ["Day", "Evening", "Night", "International"],
-            "Avg Calls": [df["Day Calls"].mean(), df["Eve Calls"].mean(), df["Night Calls"].mean(), df["Intl Calls"].mean()],
-        })
-        fig = px.bar(
-            call_data, x="Period", y="Avg Calls",
-            color="Period", color_discrete_map={"Day": "#ffd700", "Evening": "#ff6b35", "Night": "#dc143c", "International": "#4a90d9"},
-            title="⏰ Average Calls by Time Period",
-        )
-        fig.update_layout(template="plotly_dark", paper_bgcolor="#0a0a0f", plot_bgcolor="#0a0a0f", height=350, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-
-
-def run_individual_tool(tool_name, df):
-    """Run a single tool and display results."""
-    tool_info = TOOL_REGISTRY[tool_name]
-    result = tool_info["fn"](df)
-    st.markdown(f"**{tool_info['icon']} Result:** {result['summary']}")
-    if result.get("chart"):
-        st.plotly_chart(result["chart"], use_container_width=True)
-    if result.get("data") and isinstance(result["data"], list):
-        with st.expander("📋 View Raw Data"):
-            st.dataframe(pd.DataFrame(result["data"]), use_container_width=True)
-
-
 # ─── Main Application ───
 def main():
     render_header()
+    
+    server_online = check_server_health()
+    if not server_online:
+        st.error(f"⚠️ Cannot connect to ForensiX API Server at {SERVER_URL}. Please ensure the server is running.")
+        return
 
     # ─── Sidebar ───
     with st.sidebar:
-        st.markdown("### ⚙️ Configuration")
-
-        # API Key
-        api_key = st.text_input(
-            "🔑 Gemini API Key",
-            value=os.getenv("GEMINI_API_KEY", ""),
-            type="password",
-            help="Get your free API key at aistudio.google.com",
-        )
-
+        st.markdown("### ⚙️ Server Connection")
+        st.success("✅ Connected to API Server")
+        
+        # We don't ask for API key here anymore, it's on the server side in .env
+        
         st.markdown("---")
 
         # Data source
         st.markdown("### 📂 Evidence Data")
-        data_source = st.radio("Source", ["Default CDR File", "Upload CSV"], label_visibility="collapsed")
-
-        uploaded_file = None
-        if data_source == "Upload CSV":
-            uploaded_file = st.file_uploader("Upload CDR CSV", type="csv")
+        
+        files_data = get_uploaded_files()
+        file_names = [f["name"] for f in files_data]
+        
+        if not file_names:
+            st.warning("No files uploaded.")
+        
+        selected_file = st.selectbox("Select Evidence Dataset", file_names)
+        
+        uploaded_file = st.file_uploader("Upload New CDR CSV", type="csv")
+        if uploaded_file is not None:
+            if st.button("Upload to Server"):
+                with st.spinner("Uploading..."):
+                    success, msg = upload_file(uploaded_file)
+                    if success:
+                        st.success(f"Uploaded {uploaded_file.name}")
+                        st.rerun()
+                    else:
+                        st.error(f"Upload failed: {msg}")
 
         st.markdown("---")
 
         # Tool reference
         st.markdown("### 🧰 Available Tools")
-        for name, info in TOOL_REGISTRY.items():
-            st.markdown(f"""<div class="tool-card">{info['icon']} <strong>{name.replace('_', ' ').title()}</strong><br/><small>{info['description'][:80]}...</small></div>""", unsafe_allow_html=True)
+        tools = get_available_tools()
+        for info in tools:
+            st.markdown(f"""<div class="tool-card">{info['icon']} <strong>{info['name'].replace('_', ' ').title()}</strong><br/><small>{info['description'][:80]}...</small></div>""", unsafe_allow_html=True)
 
-    # ─── Load Data ───
-    default_path = os.path.join(os.path.dirname(__file__), "CDR-Call-Details.csv")
-    df = load_data(file_path=default_path, uploaded_file=uploaded_file)
-
-    if df is None:
-        st.warning("⚠️ No CDR data loaded. Please upload a CSV file or ensure CDR-Call-Details.csv is in the project directory.")
+    if not selected_file:
+        st.warning("⚠️ No evidence datasets available. Please upload a file.")
         return
 
     # ─── Tabs ───
@@ -277,19 +255,44 @@ def main():
     # ──────────────────────────────
     with tab1:
         st.markdown("## 📊 Evidence Overview")
-        render_stats(df)
-        st.markdown("<br>", unsafe_allow_html=True)
-        render_overview_charts(df)
-
-        with st.expander("🔎 Preview Raw Evidence Data"):
-            st.dataframe(df.head(100), use_container_width=True)
+        st.markdown(f"**Selected Dataset:** {selected_file}")
+        
+        selected_file_info = next((f for f in files_data if f["name"] == selected_file), None)
+        if selected_file_info:
+            cols = st.columns(3)
+            cols[0].markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value">{selected_file_info.get("rows", "N/A")}</div>
+                <div class="stat-label">Total Records</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            size_mb = selected_file_info.get("size_bytes", 0) / (1024 * 1024)
+            cols[1].markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value">{size_mb:.2f} MB</div>
+                <div class="stat-label">File Size</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            cols[2].markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value">{len(selected_file_info.get("columns", []))}</div>
+                <div class="stat-label">Columns</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            with st.expander("🔎 View Columns"):
+                st.write(", ".join(selected_file_info.get("columns", [])))
+                
+        st.info("💡 Note: In API-First mode, raw data preview and summary charts are generated by running tools instead of direct pandas operations on the client.")
 
     # ──────────────────────────────
     # TAB 2: AI Agent Analysis
     # ──────────────────────────────
     with tab2:
         st.markdown("## 🤖 AI Forensic Agent")
-        st.markdown("The AI agent will plan its analysis approach, call forensic tools, interpret results, and generate a comprehensive report.")
+        st.markdown("The AI agent will plan its analysis approach, call forensic tools via the API, interpret results, and generate a comprehensive report.")
 
         query = st.text_area(
             "📝 Investigation Query",
@@ -298,56 +301,87 @@ def main():
         )
 
         if st.button("🚀 Launch Forensic Analysis", type="primary", use_container_width=True):
-            if not api_key or api_key == "your_gemini_api_key_here":
-                st.error("❌ Please enter a valid Gemini API key in the sidebar.")
-                return
-
             # Create containers for live updates
             status_container = st.container()
             results_container = st.container()
 
-            charts_collected = []
-            step_counter = {"val": 0}
-
-            def on_step(step_type, content, chart=None):
-                step_counter["val"] += 1
-                with results_container:
-                    if step_type == "thought":
-                        st.markdown(f'<div class="agent-thought">🧠 <strong>Agent Reasoning (Step {step_counter["val"]})</strong><br/>{content}</div>', unsafe_allow_html=True)
-                    elif step_type == "tool_call":
-                        st.markdown(f'<div class="agent-tool-call">⚡ {content}</div>', unsafe_allow_html=True)
-                    elif step_type == "tool_result":
-                        st.markdown(f'<div class="agent-result">✅ {content}</div>', unsafe_allow_html=True)
-                        if chart:
-                            st.plotly_chart(chart, use_container_width=True)
-                            charts_collected.append(chart)
-                    elif step_type == "error":
-                        st.markdown(f'<div class="agent-error">❌ {content}</div>', unsafe_allow_html=True)
-
             with status_container:
-                with st.spinner("🔬 ForensiX Agent is analyzing the evidence..."):
+                with st.spinner("🔬 ForensiX Agent is analyzing the evidence via API..."):
                     try:
-                        steps = run_agent(api_key, df, query, on_step=on_step)
-                        st.success(f"✅ Analysis complete! Agent executed {step_counter['val']} steps.")
+                        response = requests.post(f"{SERVER_URL}/api/chat", json={
+                            "query": query,
+                            "file": selected_file
+                        })
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            steps = data.get("steps", [])
+                            
+                            with results_container:
+                                for step in steps:
+                                    step_type = step.get("type")
+                                    content = step.get("content")
+                                    chart_json = step.get("chart_json")
+                                    
+                                    if step_type == "thought":
+                                        st.markdown(f'<div class="agent-thought">🧠 <strong>Agent Reasoning</strong><br/>{content}</div>', unsafe_allow_html=True)
+                                    elif step_type == "tool_call":
+                                        st.markdown(f'<div class="agent-tool-call">⚡ {content}</div>', unsafe_allow_html=True)
+                                    elif step_type == "tool_result":
+                                        st.markdown(f'<div class="agent-result">✅ {content}</div>', unsafe_allow_html=True)
+                                        if chart_json:
+                                            # Deserialize Plotly JSON and render
+                                            fig = pio.from_json(chart_json)
+                                            st.plotly_chart(fig, use_container_width=True)
+                                    elif step_type == "error":
+                                        st.markdown(f'<div class="agent-error">❌ {content}</div>', unsafe_allow_html=True)
+                            
+                            st.success(f"✅ Analysis complete! Agent executed {len(steps)} steps.")
+                        else:
+                            st.error(f"❌ Server Error: {response.text}")
                     except Exception as e:
-                        st.error(f"❌ Agent error: {str(e)}")
+                        st.error(f"❌ Connection error: {str(e)}")
 
     # ──────────────────────────────
     # TAB 3: Individual Tools
     # ──────────────────────────────
     with tab3:
         st.markdown("## 🔧 Run Individual Analysis Tools")
-        st.markdown("Select and run specific forensic tools independently.")
+        st.markdown("Select and run specific forensic tools independently via the API.")
 
-        tool_name = st.selectbox(
-            "Select Tool",
-            options=list(TOOL_REGISTRY.keys()),
-            format_func=lambda x: f"{TOOL_REGISTRY[x]['icon']} {x.replace('_', ' ').title()}",
-        )
+        if tools:
+            tool_name = st.selectbox(
+                "Select Tool",
+                options=[t["name"] for t in tools],
+                format_func=lambda x: next((f"{t['icon']} {t['name'].replace('_', ' ').title()}" for t in tools if t["name"] == x), x)
+            )
 
-        if st.button(f"▶️ Run {tool_name.replace('_', ' ').title()}", use_container_width=True):
-            with st.spinner(f"Running {tool_name}..."):
-                run_individual_tool(tool_name, df)
+            # Some tools take args, but for simplicity in the UI we use defaults
+            st.info("Running tool with default parameters.")
+
+            if st.button(f"▶️ Run Tool", use_container_width=True):
+                with st.spinner(f"Executing on server..."):
+                    try:
+                        response = requests.post(f"{SERVER_URL}/api/tools/{tool_name}/run", json={
+                            "file": selected_file,
+                            "args": {}
+                        })
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            st.markdown(f"**Result:** {result['summary']}")
+                            
+                            if result.get("chart_json"):
+                                fig = pio.from_json(result["chart_json"])
+                                st.plotly_chart(fig, use_container_width=True)
+                            
+                            if result.get("data"):
+                                with st.expander("📋 View Raw Data"):
+                                    st.dataframe(pd.DataFrame(result["data"]), use_container_width=True)
+                        else:
+                            st.error(f"❌ Error: {response.text}")
+                    except Exception as e:
+                        st.error(f"❌ Connection error: {str(e)}")
 
 
 if __name__ == "__main__":

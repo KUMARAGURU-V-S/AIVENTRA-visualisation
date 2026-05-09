@@ -102,11 +102,12 @@ def execute_tool(tool_name: str, args: dict, df: pd.DataFrame) -> dict:
     # Filter args to only those the function accepts
     import inspect
     valid_params = inspect.signature(fn).parameters
-    filtered_args = {k: v for k, v in args.items() if k in valid_params and k != "df"}
-    return fn(df, **filtered_args)
+    filtered_args = {k: v for k, v in args.items() if k in valid_params and k != "df" and k != "serialize"}
+    # Execute the tool, forcing JSON serialization of the chart
+    return fn(df, **filtered_args, serialize=True)
 
 
-def run_agent(api_key: str, df: pd.DataFrame, user_query: str, on_step=None):
+def run_agent(api_key: str, df: pd.DataFrame, user_query: str):
     """
     Run the forensic analysis agent.
 
@@ -114,10 +115,9 @@ def run_agent(api_key: str, df: pd.DataFrame, user_query: str, on_step=None):
         api_key: Gemini API key
         df: CDR DataFrame
         user_query: The investigator's analysis request
-        on_step: Callback function(step_type, content, chart=None) for live UI updates
 
     Returns:
-        List of all steps taken by the agent
+        List of all steps taken by the agent (structured dictionaries)
     """
     client = genai.Client(api_key=api_key)
     model = "gemini-2.0-flash"
@@ -160,10 +160,8 @@ def run_agent(api_key: str, df: pd.DataFrame, user_query: str, on_step=None):
         text_parts = [p.text for p in parts if p.text]
         if text_parts:
             text = "\n".join(text_parts)
-            step = {"type": "thought", "content": text}
+            step = {"type": "thought", "content": text, "tool": None, "args": None, "icon": "🧠", "chart_json": None}
             steps.append(step)
-            if on_step:
-                on_step("thought", text)
 
         # Check for function calls
         fn_calls = [p.function_call for p in parts if p.function_call]
@@ -182,22 +180,18 @@ def run_agent(api_key: str, df: pd.DataFrame, user_query: str, on_step=None):
             tool_args = dict(fc.args) if fc.args else {}
             icon = TOOL_REGISTRY.get(tool_name, {}).get("icon", "🔧")
 
-            step_info = {"type": "tool_call", "tool": tool_name, "args": tool_args, "icon": icon}
+            step_info = {"type": "tool_call", "content": f"Calling `{tool_name}`", "tool": tool_name, "args": tool_args, "icon": icon, "chart_json": None}
             steps.append(step_info)
-            if on_step:
-                on_step("tool_call", f"{icon} Calling `{tool_name}`({json.dumps(tool_args)})")
 
             # Execute the tool
             try:
                 result = execute_tool(tool_name, tool_args, df)
                 summary = result["summary"]
-                chart = result.get("chart")
+                chart_json = result.get("chart")
                 data_preview = str(result.get("data", []))[:500]
 
-                step_result = {"type": "tool_result", "tool": tool_name, "summary": summary, "chart": chart, "icon": icon}
+                step_result = {"type": "tool_result", "content": summary, "tool": tool_name, "args": None, "icon": "✅", "chart_json": chart_json}
                 steps.append(step_result)
-                if on_step:
-                    on_step("tool_result", summary, chart)
 
                 fn_response_parts.append(
                     types.Part.from_function_response(
@@ -207,9 +201,7 @@ def run_agent(api_key: str, df: pd.DataFrame, user_query: str, on_step=None):
                 )
             except Exception as e:
                 error_msg = f"Tool error: {str(e)}"
-                steps.append({"type": "error", "tool": tool_name, "content": error_msg})
-                if on_step:
-                    on_step("error", error_msg)
+                steps.append({"type": "error", "content": error_msg, "tool": tool_name, "args": None, "icon": "❌", "chart_json": None})
                 fn_response_parts.append(
                     types.Part.from_function_response(name=tool_name, response={"error": error_msg})
                 )
