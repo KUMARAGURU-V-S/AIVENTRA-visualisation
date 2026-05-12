@@ -10,6 +10,10 @@ ForensiX is an AI-powered digital forensics API server that analyzes Call Detail
 - **Interactive Visualizations**: Returns Plotly charts as JSON, which can be rendered in any frontend.
 - **Streamlit Client**: Included Streamlit UI that acts as a client to the API server.
 
+## Security
+
+This project uses **Syft** and **Grype** for Software Bill of Materials (SBOM) generation and vulnerability scanning. For more details, see [SECURITY.md](SECURITY.md).
+
 ## Installation
 
 1. Clone the repository
