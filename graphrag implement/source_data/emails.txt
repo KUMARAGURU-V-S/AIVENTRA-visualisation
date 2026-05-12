@@ -1,0 +1,11 @@
+From: tech-support@trustworthy.com (Bob)
+To: charlie@victim.com
+Subject: Urgent: Security Update Required
+Date: 2026-05-01 10:15:00
+
+Dear Charlie,
+We noticed unusual activity on your account. Please click the link below to verify your identity:
+http://malicious-link.com/verify?user=charlie
+
+Regards,
+Tech Support

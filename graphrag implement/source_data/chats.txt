@@ -1,0 +1,5 @@
+[2026-05-01 10:00:00] Alice -> Bob: Did you get the access credentials for the Charlie's database?
+[2026-05-01 10:05:00] Bob -> Alice: Working on it. Sent him the link. Just waiting for the click.
+[2026-05-02 14:00:00] Bob -> Alice: I'm in. Using IP 192.168.50.122. Downloading the records now.
+[2026-05-02 15:30:00] Alice -> Bob: Good. Transfer the commission to my offshore account once the buyer pays.
+[2026-05-03 09:00:00] Bob -> Alice: Payment received. Sending 50,000 to your account ACC-8822.

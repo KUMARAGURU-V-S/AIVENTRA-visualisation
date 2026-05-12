@@ -1,0 +1,4 @@
+timestamp,event,user,ip_address,details
+2026-05-02 13:55:00,LOGIN_SUCCESS,admin,192.168.50.122,
+2026-05-02 14:10:00,DATA_EXPORT,admin,192.168.50.122,Customer_Database_Dump.sql
+2026-05-02 14:45:00,LOGOUT,admin,192.168.50.122,

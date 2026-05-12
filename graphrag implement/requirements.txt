@@ -1,0 +1,9 @@
+llama-index
+llama-index-core
+llama-index-llms-openai
+llama-index-embeddings-openai
+llama-index-llms-featherlessai
+python-dotenv
+networkx
+pandas
+matplotlib
